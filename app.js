@@ -4,8 +4,43 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
 const bodyParser = require('body-parser');
-
 const app = express();
+
+
+//const twilio = require('twilio');
+
+//Envio msg Portal:
+app.post('/api/enviar-whatsapp', async (req, res) => {
+  const { telefone, mensagem } = req.body;
+
+  if (!telefone || !mensagem) {
+    return res.status(400).json({ erro: 'Telefone e mensagem são obrigatórios.' });
+  }
+
+  // Garante que o telefone está no formato internacional (ex: +5541999990000)
+  let numero = telefone.replace(/\D/g, '');
+  if (numero.length === 11) {
+    // Se for só DDD+numero, adiciona o +55
+    numero = `+55${numero}`;
+  } else if (!numero.startsWith('+')) {
+    numero = `+${numero}`;
+  }
+
+  try {
+    const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+
+    const response = await client.messages.create({
+      from: 'whatsapp:+14155238886', // Sandbox do Twilio
+      to: `whatsapp:${numero}`,
+      body: mensagem,
+    });
+
+    res.json({ sucesso: true, sid: response.sid });
+  } catch (err) {
+    console.error('Erro ao enviar WhatsApp:', err);
+    res.status(500).json({ erro: 'Erro ao enviar mensagem pelo WhatsApp' });
+  }
+});
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -43,15 +78,115 @@ function gerarCodigo() {
 }
 
 // POST: criar nova mensagem
-app.post('/mensagem', async (req, res) => {
+/*app.post('/mensagem', async (req, res) => {
   const codigo = gerarCodigo();
   const novaMensagem = new Mensagem({ codigo, ...req.body });
 
   await novaMensagem.save();
   const msgCompleta = await Mensagem.findOne({ codigo }).lean();
   res.status(201).json(msgCompleta);
-});
+});*/
+/*app.post('/mensagem', async (req, res) => {
+  const codigo = gerarCodigo();
+  const novaMensagem = new Mensagem({ codigo, ...req.body });
 
+  await novaMensagem.save();
+  const msgCompleta = await Mensagem.findOne({ codigo }).lean();
+
+  // MENSAGENS PARA O WHATSAPP
+  const msgs = [
+    `Somos a Genial Guard, seu sistema de segurança para comunicação com advogados.\n` +
+    `Seu advogado(a) ${msgCompleta.advogado} enviou uma mensagem.\n` +
+    `Para conferir, baixe nosso APP de segurança e digite este código:`,
+
+    `${msgCompleta.codigo}`,
+
+    `Ou leia o QR Code fornecido para validar sua comunicação segura.\n` +
+    `Todos os advogados são conferidos pela OAB.\n` +
+    `Baixe o app aqui: https://genialguard.com/app\n` + // AJUSTE ESTE LINK
+    `Mais informações: https://genialguard.com`
+  ];
+
+  // ENVIO SEQUENCIAL DAS 3 MENSAGENS
+  try {
+    for (let texto of msgs) {
+      await axios.post(
+        `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`,
+        null,
+        {
+          params: {
+            From: 'whatsapp:+14155238886', // Número oficial Twilio
+            To: `whatsapp:+55${msgCompleta.telefone.replace(/\D/g, "")}`,
+            Body: texto
+          },
+          auth: {
+            username: process.env.TWILIO_SID,
+            password: process.env.TWILIO_TOKEN
+          }
+        }
+      );
+    }
+    console.log(`✅ Mensagens enviadas para ${msgCompleta.telefone}`);
+  } catch (err) {
+    console.error('Erro ao enviar mensagens no WhatsApp:', err);
+    // Opcional: retorne erro para o front se necessário
+  }
+
+  res.status(201).json(msgCompleta);
+});
+*/
+app.post('/mensagem', async (req, res) => {
+  const codigo = gerarCodigo();
+  const novaMensagem = new Mensagem({ codigo, ...req.body });
+
+  await novaMensagem.save();
+  const msgCompleta = await Mensagem.findOne({ codigo }).lean();
+
+  // MENSAGENS PARA O WHATSAPP
+  const msgs = [
+    `Somos a Genial Guard, seu sistema de segurança para comunicação com advogados.\n` +
+    `Seu advogado(a) ${msgCompleta.advogado} enviou uma mensagem.\n` +
+    `Para conferir, baixe nosso APP de segurança e digite este código:`,
+
+    `${msgCompleta.codigo}`,
+
+    `Ou leia o QR Code fornecido para validar sua comunicação segura.\n` +
+    `Todos os advogados são conferidos pela OAB.\n` +
+    `Baixe o app aqui: https://genialguard.com/app\n` + // AJUSTE ESTE LINK
+    `Mais informações: https://genialguard.com`
+  ];
+
+  // ENVIO SEQUENCIAL DAS 3 MENSAGENS
+  try {
+    const numeroDestino = `whatsapp:+55${msgCompleta.telefone.replace(/\D/g, "")}`;
+    for (let [idx, texto] of msgs.entries()) {
+      console.log(`Enviando mensagem ${idx + 1} para: ${numeroDestino}`);
+      console.log(`Conteúdo:`, texto);
+      await axios.post(
+        `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`,
+        null,
+        {
+          params: {
+            From: 'whatsapp:+14155238886', // Número oficial Twilio
+            To: numeroDestino,
+            Body: texto
+          },
+          auth: {
+            username: process.env.TWILIO_SID,
+            password: process.env.TWILIO_TOKEN
+          }
+        }
+      );
+      console.log(`Mensagem ${idx + 1} enviada com sucesso.`);
+    }
+    console.log(`✅ Todas as mensagens enviadas para ${numeroDestino}`);
+  } catch (err) {
+    console.error('Erro ao enviar mensagens no WhatsApp:', err?.response?.data || err.message || err);
+    // Opcional: retorne erro para o front se necessário
+  }
+
+  res.status(201).json(msgCompleta);
+});
 // GET: buscar por código via query param
 app.get("/mensagem", async (req, res) => {
   const codigo = req.query.codigo;
