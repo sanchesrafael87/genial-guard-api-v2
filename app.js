@@ -19,8 +19,17 @@ app.post('/api/enviar-whatsapp', async (req, res) => {
 
   // Garante que o telefone está no formato internacional (ex: +5541999990000)
   let numero = telefone.replace(/\D/g, '');
+
+  // Se tiver DDD + 8 dígitos e não tiver o 9, adiciona
+  // Exemplo: 41999990000 -> 41999990000 (correto)
+  // Se for 4112345678, adiciona o 9: 41912345678
+
+  if (numero.length === 10 && !numero.startsWith('9', 2)) {
+    // Insere o 9 após os dois primeiros dígitos (DDD)
+    numero = numero.slice(0, 2) + '9' + numero.slice(2);
+  }
+
   if (numero.length === 11) {
-    // Se for só DDD+numero, adiciona o +55
     numero = `+55${numero}`;
   } else if (!numero.startsWith('+')) {
     numero = `+${numero}`;
@@ -30,7 +39,7 @@ app.post('/api/enviar-whatsapp', async (req, res) => {
     const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
 
     const response = await client.messages.create({
-      from: 'whatsapp:+14155238886', // Sandbox do Twilio
+      from: process.env.TWILIO_WHATSAPP, // Sandbox do Twilio
       to: `whatsapp:${numero}`,
       body: mensagem,
     });
